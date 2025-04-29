@@ -5,6 +5,9 @@ import librosa
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from librosa.beat import tempo
+from madmom.audio import Signal
+from madmom.features.beats import RNNBeatProcessor, DBNBeatTrackingProcessor
+from madmom.features.tempo import TempoEstimationProcessor
 from pydantic import BaseModel
 import yt_dlp
 from scipy.stats import mode
@@ -14,6 +17,7 @@ app = FastAPI()
 
 class YouTubeLink(BaseModel):
     url: str
+    use_madmom: bool
 
 # Krumhansl-Schmuckler key profiles for major and minor
 MAJOR_PROFILE = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
@@ -168,6 +172,27 @@ def calc_bpm(audio_path):
     key = estimate_key(audio_path)
     return {"bpm": bpm, "note": note, "key": key}
 
+# Function to detect BPM with madmom
+def mm_detect_bpm(audio_path):
+    print("STARTING DETECTING BPM MADMOM +", audio_path)
+
+    # use beat processor
+    beat_act = RNNBeatProcessor()(audio_path)
+
+    # process using DBNTempoTracking
+    proc = DBNBeatTrackingProcessor(fps=100, min_bpm=80, max_bpm=280)
+    beats = proc(beat_act)
+
+    if len(beats) < 2:
+        return 0.0  # Not enough beats to compute BPM
+
+    intervals = np.diff(beats)
+    median_interval = np.median(intervals)
+    bpm = 60.0 / median_interval
+
+    print("FINISHED DETECTING BPM MADMOM")
+    return np.round(bpm)
+
 # Get title of the youtube video
 def get_title(link):
     ytdl_opts = {
@@ -188,14 +213,28 @@ def get_title(link):
 def detect_bpm(link: YouTubeLink):
     temp_id = str(uuid.uuid4())
     audio_file = f"./tmp/{temp_id}"
+
+    madmom_bpm = 0
+    librosa_bpm = 0
+
     try:
         download_audio(link.url, audio_file)
-        bpm = calc_bpm(audio_file+".wav")
+
+        if link.use_madmom:
+            # process with madmom
+            madmom_bpm = mm_detect_bpm(audio_file+".wav")
+        else:
+            # process with librosa
+            librosa_bpm = calc_bpm(audio_file+".wav")
+
         title = get_title(link.url)
         
         return {
             "title": title,
-            "result": bpm
+            "result": {
+                "librosa": librosa_bpm,
+                "madmom": madmom_bpm
+            }
         }
     except Exception as e:
         print(f"Error: {e}")

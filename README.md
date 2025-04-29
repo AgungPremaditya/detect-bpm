@@ -57,13 +57,16 @@ This project provides a REST API to detect the BPM (beats per minute) and musica
     - **Request body:**
         ```json
         {
-          "url": "https://www.youtube.com/watch?v=EXAMPLE"
+          "url": "https://www.youtube.com/watch?v=EXAMPLE",
+      
+          // To use madmom instead of librossa, better result but take times
+          "use_madmom": true 
         }
         ```
 
     - **Example using `curl`:**
         ```bash
-        curl -X POST "http://127.0.0.1:8000/detect-bpm" -H "Content-Type: application/json" -d '{"url": "https://www.youtube.com/watch?v=EXAMPLE"}'
+        curl -X POST "http://127.0.0.1:8000/detect-bpm" -H "Content-Type: application/json" -d '{"url": "https://www.youtube.com/watch?v=EXAMPLE","use_madmom": true}'
         ```
 
 3. **Response:**
